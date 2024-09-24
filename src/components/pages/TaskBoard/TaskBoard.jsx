@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "../../Modal/Modal";
 import toast, { Toaster } from "react-hot-toast";
 import { MdCreate } from "react-icons/md";
@@ -6,6 +6,21 @@ import TaskColumn from "../../TaskColumn/TaskColumn";
 
 const TaskBoard = () => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [totalTasks, setTotalTasks] = useState([]);
+
+  const todoTasks = totalTasks.filter(task => task.status === 'todo');
+  const ongoingTasks = totalTasks.filter(task => task.status === 'ongoing');
+  const completeTasks = totalTasks.filter(task => task.status === 'complete');
+
+
+  useEffect(() => {
+    fetch("http://localhost:5000/tasks")
+      .then(res => res.json())
+      .then(data =>{
+          console.log(data);
+          setTotalTasks(data);
+      })
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -16,7 +31,7 @@ const TaskBoard = () => {
     const deadline = form.deadline.value;
     const priority = form.priority.value;
 
-    const newTask = { title, description, deadline, priority };
+    const newTask = { title, description, deadline, priority, status: "todo" };
 
     //   send data to server
     fetch("http://localhost:5000/tasks", {
@@ -32,9 +47,37 @@ const TaskBoard = () => {
         if (data.insertedId) {
           toast.success("Task Created Successfully!");
           form.reset();
+
+          setTotalTasks(prevTasks => [...prevTasks, ])
         }
       });
   };
+
+  // drag and drop --> on drop action
+  const onDrop = (e, newStatus) =>{
+    const taskId = e.dataTransfer.getData('taskId');
+    console.log(taskId, newStatus);
+
+    // update task status in database
+    fetch(`http://localhost:5000/tasks/${taskId}`, {
+      method: 'PATCH',
+      headers:{
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({status: newStatus})
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log(data);
+      if(data.modifiedCount> 0){
+        toast.success("Task Updated Successfully!");
+
+        // update task status in UI
+        setTotalTasks(prevTasks => prevTasks.map(task => task._id === taskId ? {...task, status: newStatus} : task));
+      }
+    })
+  }
+
 
   return (
     <div>
@@ -101,7 +144,7 @@ const TaskBoard = () => {
                 </select>
               </div>
             </div>
-            <button className="block rounded-full text-center px-5 py-2 text-sm md:text-lg mb-2 font-medium text-white bg-cyan-400 hover:bg-cyan-500 mt-10 w-max mx-auto">
+            <button className="block mx-auto rounded-full text-center px-5 py-2 text-sm md:text-lg mb-2 font-medium text-white bg-cyan-400 hover:bg-cyan-500 mt-10">
               Create
             </button>
           </form>
@@ -110,10 +153,11 @@ const TaskBoard = () => {
 
       {/* Tasks container */}
       <section>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-10 bg-gray-300 p-4">
-          <TaskColumn></TaskColumn>
-          <TaskColumn></TaskColumn>
-          <TaskColumn></TaskColumn>
+        <h2>Total Tasks: {totalTasks.length}</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-10 bg-gray-300 p-4 rounded-md mx-4 md:mx-28 lg:mx-10">
+          <TaskColumn status="todo" tasks={todoTasks} onDrop={onDrop}></TaskColumn>
+          <TaskColumn status="ongoing" tasks={ongoingTasks} onDrop={onDrop}></TaskColumn>
+          <TaskColumn status="complete" tasks={completeTasks} onDrop={onDrop}></TaskColumn>
         </div>
       </section>
       <Toaster />
